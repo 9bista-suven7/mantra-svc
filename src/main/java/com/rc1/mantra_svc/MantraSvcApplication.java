@@ -111,10 +111,54 @@ public class MantraSvcApplication {
 		}
 
 		if (candidate.startsWith("mongodb://") || candidate.startsWith("mongodb+srv://")) {
-			return candidate;
+			String withDatabase = ensureDatabaseName(candidate);
+			if (!withDatabase.equals(candidate)) {
+				System.out.println("MongoDB URI did not include a database name; applied default database.");
+			}
+			return withDatabase;
 		}
 
 		return null;
+	}
+
+	private static String ensureDatabaseName(String uri) {
+		String defaultDb = readEnvRaw("MONGO_DB");
+		if (defaultDb == null) {
+			defaultDb = "mantra_db";
+		}
+
+		int schemeIdx = uri.indexOf("://");
+		if (schemeIdx < 0) {
+			return uri;
+		}
+
+		int authorityStart = schemeIdx + 3;
+		int pathStart = uri.indexOf('/', authorityStart);
+		int queryStart = uri.indexOf('?');
+
+		if (pathStart < 0) {
+			if (queryStart < 0) {
+				return uri + "/" + defaultDb;
+			}
+			return uri.substring(0, queryStart) + "/" + defaultDb + uri.substring(queryStart);
+		}
+
+		int pathEnd = queryStart >= 0 ? queryStart : uri.length();
+		String pathValue = uri.substring(pathStart + 1, pathEnd).trim();
+		if (!pathValue.isEmpty()) {
+			return uri;
+		}
+
+		return uri.substring(0, pathStart + 1) + defaultDb + uri.substring(pathEnd);
+	}
+
+	private static String readEnvRaw(String name) {
+		String value = System.getenv(name);
+		if (value == null) {
+			return null;
+		}
+		String trimmed = value.trim();
+		return trimmed.isEmpty() ? null : trimmed;
 	}
 
 }
