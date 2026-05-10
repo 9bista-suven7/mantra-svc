@@ -5,9 +5,12 @@ import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.scheduling.annotation.EnableScheduling;
+
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Mantra Application - Your All-in-One Day to Day Life Assistant.
@@ -19,29 +22,49 @@ import java.nio.file.Paths;
 public class MantraSvcApplication {
 
 	public static void main(String[] args) {
-		String mongoUri = resolveMongoUri();
+		String mongoUri = resolveMongoUriWithDiagnostics();
 		if (mongoUri == null) {
 			throw new IllegalStateException(
-				"MongoDB URI not configured. Set /etc/secrets/mongo_connection (Render) or MONGO_URI environment variable."
+				"MongoDB URI not configured. Checked secret files [/etc/secrets/mongo_connection, /etc/secrects/mongo_connection, etc/secrets/mongo_connection] and env vars [MONGO_URI, MONGO_CONNECTION]."
 			);
 		}
 		System.setProperty("spring.data.mongodb.uri", mongoUri);
+		System.out.println("MongoDB URI configured from startup resolver.");
 
 		SpringApplication.run(MantraSvcApplication.class, args);
 	}
 
-	private static String resolveMongoUri() {
-		String fromSecret = readSecretFile(Paths.get("/etc/secrets/mongo_connection"));
-		if (fromSecret != null) return fromSecret;
+	private static String resolveMongoUriWithDiagnostics() {
+		List<Path> pathsToCheck = new ArrayList<>();
+		pathsToCheck.add(Paths.get("/etc/secrets/mongo_connection"));
+		pathsToCheck.add(Paths.get("/etc/secrects/mongo_connection"));
+		pathsToCheck.add(Paths.get("etc/secrets/mongo_connection"));
 
-		// Fallback in case path was configured without leading slash.
-		String fromRelativeSecret = readSecretFile(Paths.get("etc/secrets/mongo_connection"));
-		if (fromRelativeSecret != null) return fromRelativeSecret;
+		for (Path path : pathsToCheck) {
+			String value = readSecretFile(path);
+			if (value != null) {
+				System.out.println("MongoDB URI loaded from secret file: " + path);
+				return value;
+			}
+		}
 
 		String fromMongoUriEnv = readEnv("MONGO_URI");
-		if (fromMongoUriEnv != null) return fromMongoUriEnv;
+		if (fromMongoUriEnv != null) {
+			System.out.println("MongoDB URI loaded from environment variable: MONGO_URI");
+			return fromMongoUriEnv;
+		}
 
-		return readEnv("MONGO_CONNECTION");
+		String fromMongoConnectionEnv = readEnv("MONGO_CONNECTION");
+		if (fromMongoConnectionEnv != null) {
+			System.out.println("MongoDB URI loaded from environment variable: MONGO_CONNECTION");
+			return fromMongoConnectionEnv;
+		}
+
+		for (Path path : pathsToCheck) {
+			System.err.println("Mongo secret file exists(" + path + "): " + Files.exists(path));
+		}
+
+		return null;
 	}
 
 	private static String readSecretFile(Path path) {
