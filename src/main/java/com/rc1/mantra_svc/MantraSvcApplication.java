@@ -1,7 +1,7 @@
 package com.rc1.mantra_svc;
 
 import com.rc1.mantra_svc.config.AppProperties;
-import org.springframework.boot.SpringApplication;
+import org.springframework.boot.builder.SpringApplicationBuilder;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.scheduling.annotation.EnableScheduling;
@@ -25,14 +25,21 @@ public class MantraSvcApplication {
 		String mongoUri = resolveMongoUriWithDiagnostics();
 		if (mongoUri == null) {
 			throw new IllegalStateException(
-				"MongoDB URI not configured. Checked secret files [/etc/secrets/mongo_connection, /etc/secrects/mongo_connection, etc/secrets/mongo_connection] and env vars [MONGO_URI, MONGO_CONNECTION]."
+				"MongoDB URI not configured. Checked secret files and env vars [MONGO_URI, MONGO_CONNECTION]."
 			);
 		}
-		System.setProperty("spring.data.mongodb.uri", mongoUri);
-		System.setProperty("spring.mongodb.uri", mongoUri);
-		System.out.println("MongoDB URI configured from startup resolver.");
 
-		SpringApplication.run(MantraSvcApplication.class, args);
+		String finalUri = ensureDatabaseName(mongoUri);
+		System.out.println("MongoDB URI resolved. DB name present: " + finalUri.contains("/mantra") + " or custom DB set.");
+
+		// Use SpringApplicationBuilder.properties() — guaranteed to apply BEFORE
+		// Spring auto-configuration resolves MongoClient settings.
+		new SpringApplicationBuilder(MantraSvcApplication.class)
+			.properties(
+				"spring.data.mongodb.uri=" + finalUri,
+				"spring.mongodb.uri=" + finalUri
+			)
+			.run(args);
 	}
 
 	private static String resolveMongoUriWithDiagnostics() {
