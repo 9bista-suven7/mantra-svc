@@ -22,6 +22,8 @@ import java.util.List;
 public class MantraSvcApplication {
 
 	public static void main(String[] args) {
+		configureTlsDefaults();
+
 		String mongoUri = resolveMongoUriWithDiagnostics();
 		if (mongoUri == null) {
 			throw new IllegalStateException(
@@ -40,6 +42,17 @@ public class MantraSvcApplication {
 				"spring.mongodb.uri=" + finalUri
 			)
 			.run(args);
+	}
+
+	private static void configureTlsDefaults() {
+		String configuredProtocols = readEnvRaw("MONGO_TLS_PROTOCOLS");
+		if (configuredProtocols == null) {
+			configuredProtocols = "TLSv1.2";
+		}
+
+		System.setProperty("jdk.tls.client.protocols", configuredProtocols);
+		System.setProperty("https.protocols", configuredProtocols);
+		System.out.println("MongoDB TLS protocols configured: " + configuredProtocols);
 	}
 
 	private static String resolveMongoUriWithDiagnostics() {
