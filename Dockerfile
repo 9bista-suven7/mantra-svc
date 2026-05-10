@@ -15,4 +15,4 @@ COPY --from=build /app/target/*.jar app.jar
 
 EXPOSE 8080
 
-CMD ["sh", "-c", "java -jar app.jar --server.port=$PORT"]
+CMD ["sh", "-c", "MONGO_FILE=/etc/secrets/mongo_connection; if [ -f \"$MONGO_FILE\" ]; then MONGO_URI=$(tr -d '\\r\\n' < \"$MONGO_FILE\"); fi; exec java -jar app.jar --server.port=${PORT:-8080} ${MONGO_URI:+--spring.data.mongodb.uri=$MONGO_URI}"]
