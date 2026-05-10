@@ -29,6 +29,7 @@ public class MantraSvcApplication {
 			);
 		}
 		System.setProperty("spring.data.mongodb.uri", mongoUri);
+		System.setProperty("spring.mongodb.uri", mongoUri);
 		System.out.println("MongoDB URI configured from startup resolver.");
 
 		SpringApplication.run(MantraSvcApplication.class, args);
@@ -70,9 +71,9 @@ public class MantraSvcApplication {
 	private static String readSecretFile(Path path) {
 		try {
 			if (Files.exists(path)) {
-				String value = Files.readString(path);
-				if (value != null && !value.trim().isEmpty()) {
-					return value.trim();
+				String value = normalizeMongoUri(Files.readString(path));
+				if (value != null) {
+					return value;
 				}
 			}
 		} catch (Exception ignored) {
@@ -82,11 +83,38 @@ public class MantraSvcApplication {
 	}
 
 	private static String readEnv(String name) {
-		String value = System.getenv(name);
-		if (value == null || value.trim().isEmpty()) {
-			return null;
+		return normalizeMongoUri(System.getenv(name));
+	}
+
+	private static String normalizeMongoUri(String raw) {
+		if (raw == null) return null;
+
+		String trimmed = raw.trim();
+		if (trimmed.isEmpty()) return null;
+
+		String candidate = trimmed;
+		int eq = trimmed.indexOf('=');
+		if (eq > 0) {
+			String key = trimmed.substring(0, eq).trim();
+			if (
+				"MONGO_URI".equalsIgnoreCase(key) ||
+				"MONGO_CONNECTION".equalsIgnoreCase(key) ||
+				"spring.data.mongodb.uri".equalsIgnoreCase(key) ||
+				"spring.mongodb.uri".equalsIgnoreCase(key)
+			) {
+				candidate = trimmed.substring(eq + 1).trim();
+			}
 		}
-		return value.trim();
+
+		if (candidate.startsWith("\"") && candidate.endsWith("\"") && candidate.length() > 1) {
+			candidate = candidate.substring(1, candidate.length() - 1).trim();
+		}
+
+		if (candidate.startsWith("mongodb://") || candidate.startsWith("mongodb+srv://")) {
+			return candidate;
+		}
+
+		return null;
 	}
 
 }
